@@ -38,7 +38,7 @@ class Reader():
 
     def __isub__(self, name):
         for repo in self.data:
-            if name == Utils.path(repo):
+            if name.replace('/','') == Utils.path(repo):
                 self.data.remove(repo)
                 Utils.run(f"rm -r {name}")
         return self.data
@@ -220,7 +220,8 @@ class Utils(object):
     def run(command):
         os.setuid(pwd.getpwuid(os.getuid()).pw_uid)
         print(f"Running the command: {command}")
-        process = subprocess.Popen(shlex.split(command), stdout=subprocess.PIPE)
+        temp=subprocess.Popen(('yes'),stdout=subprocess.PIPE)
+        process = subprocess.Popen(shlex.split(command),stdin=temp.stdout, stdout=subprocess.PIPE)
         while True:
             output = process.stdout.readline()
             if output == '' or process.poll() is not None:
