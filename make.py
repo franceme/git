@@ -367,6 +367,8 @@ if __name__ == '__main__':
         [print('\t./make.py ' + str(arg) + ": " + str(routers[arg]['def'])) for arg in routers.keys()]
     else:
         Utils.start()
+        print('=============================')
+        print('Syncing the core repo')
         repo = './'
         cmdz = [
             f"git -C {repo} add .",
@@ -375,3 +377,4 @@ if __name__ == '__main__':
             f"git -C {repo} push",
         ]
         [Utils.run(cmd) for cmd in cmdz]
+        print('=============================')
