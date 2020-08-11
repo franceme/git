@@ -367,3 +367,11 @@ if __name__ == '__main__':
         [print('\t./make.py ' + str(arg) + ": " + str(routers[arg]['def'])) for arg in routers.keys()]
     else:
         Utils.start()
+        repo = './'
+        cmdz = [
+            f"git -C {repo} add .",
+            f"git -C {repo} rm .",
+            f"git -C {repo} commit -m \"Update\" -S",
+            f"git -C {repo} push",
+        ]
+        [Utils.run(cmd) for cmd in cmdz]
