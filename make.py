@@ -15,6 +15,8 @@ import pwd
 #A utility class that contains the rest of the main common files
 '''  ####################################
 
+gitUserName = 'franceme'
+
 # region Properties Loader
 class Reader():
     def __init__(self, name = '.git.json'):
@@ -22,6 +24,9 @@ class Reader():
         self.data = None
 
     def __enter__(self):
+        if not os.path.exists(self.fileName):
+            with open(self.fileName,'w') as foil:
+                foil.write('[]')
         with open(self.fileName, 'r') as foil:
             self.data = json.load(foil)
         return self
@@ -47,7 +52,7 @@ class Reader():
 class Cmds(object):
     def sha(foil, debug=True):
         if debug:
-            print(f"Determining the sha256 sum of file {foil}")
+            print(f"Determining the sha512 sum of file {foil}")
         sha = None
         with open(foil, 'rb') as new:
             contents = new.read()
@@ -78,7 +83,8 @@ class Cmds(object):
                 print('Cloning the repo: ' + str(repo))
 
                 if '/' not in repo:
-                    repo = 'franceme/'+repo
+                    global gitUserName
+                    repo = f"{gitUserName}/{repo}"
 
                 info += repo
                 Cmds.cloneHook(repo)
@@ -238,41 +244,12 @@ class Utils(object):
 # endregion
 # region Hooks
 repos = {
-    'franceme/Cryptoguard': {
+    'SampleRepo': {
         'findreplace': [
             {
-                'file':'build.gradle',
-                'find':'JAVA7SDK',
-                'replace':"JAVA7SDK"
-            },
-            {
-                'file':'build.gradle',
-                'find':'JAVA8SDK',
-                'replace':"JAVA8SDK"
-            },
-            {
-                'file':'build.gradle',
-                'find':'ANDROIDSDK',
-                'replace':"ANDROIDSDK"
-            }
-        ]
-    },
-    'franceme/cryptoguard': {
-        'findreplace': [
-            {
-                'file':'build.gradle',
-                'find':'JAVA7SDK',
-                'replace':"JAVA7SDK"
-            },
-            {
-                'file':'build.gradle',
-                'find':'JAVA8SDK',
-                'replace':"JAVA8SDK"
-            },
-            {
-                'file':'build.gradle',
-                'find':'ANDROIDSDK',
-                'replace':"ANDROIDSDK"
+                'file':'build.gradle', #Path From Repository Directory: repo/reponame/file
+                'find':'JAVA7',
+                'replace':"~/private/path/to/jdk/7"
             }
         ]
     }
@@ -339,14 +316,6 @@ routers = {
         "func": Cmds.bfg,
         "def": "Shows the commands to use BFG"
     },
-    #'create': {
-    #    "func": Cmds.create,
-    #    "def": "Creates a sha of all the files"
-    #},
-    #'verify': {
-    #    "func": Cmds.verify,
-    #    "def": "Compares the sha of all of the files"
-    #},
 }
 
 
@@ -367,14 +336,3 @@ if __name__ == '__main__':
         [print('\t./make.py ' + str(arg) + ": " + str(routers[arg]['def'])) for arg in routers.keys()]
     else:
         Utils.start()
-        print('=============================')
-        print('Syncing the core repo')
-        repo = './'
-        cmdz = [
-            f"git -C {repo} add .",
-            f"git -C {repo} rm .",
-            f"git -C {repo} commit -m \"Update\" -S",
-            f"git -C {repo} push",
-        ]
-        [Utils.run(cmd) for cmd in cmdz]
-        print('=============================')
