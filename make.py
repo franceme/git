@@ -244,12 +244,41 @@ class Utils(object):
 # endregion
 # region Hooks
 repos = {
-    'SampleRepo': {
+    'franceme/Cryptoguard': {
         'findreplace': [
             {
-                'file':'build.gradle', #Path From Repository Directory: repo/reponame/file
-                'find':'JAVA7',
-                'replace':"~/private/path/to/jdk/7"
+                'file':'build.gradle',
+                'find':'JAVA7SDK',
+                'replace':"/home/maister/.sdkman/candidates/java/7.0.80-oracle"
+            },
+            {
+                'file':'build.gradle',
+                'find':'JAVA8SDK',
+                'replace':"/home/maister/.sdkman/candidates/java/current"
+            },
+            {
+                'file':'build.gradle',
+                'find':'ANDROIDSDK',
+                'replace':"/home/maister/.sdkman/candidates/android/current"
+            }
+        ]
+    },
+    'franceme/cryptoguard': {
+        'findreplace': [
+            {
+                'file':'build.gradle',
+                'find':'JAVA7SDK',
+                'replace':"/home/maister/.sdkman/candidates/java/7.0.80-oracle"
+            },
+            {
+                'file':'build.gradle',
+                'find':'JAVA8SDK',
+                'replace':"/home/maister/.sdkman/candidates/java/current"
+            },
+            {
+                'file':'build.gradle',
+                'find':'ANDROIDSDK',
+                'replace':"/home/maister/.sdkman/candidates/android/current"
             }
         ]
     }
@@ -336,3 +365,14 @@ if __name__ == '__main__':
         [print('\t./make.py ' + str(arg) + ": " + str(routers[arg]['def'])) for arg in routers.keys()]
     else:
         Utils.start()
+        print('=============================')
+        print('Syncing the core repo')
+        repo = './'
+        cmdz = [
+            f"git -C {repo} add .",
+            f"git -C {repo} rm .",
+            f"git -C {repo} commit -m \"Update\" -S",
+            f"git -C {repo} push",
+        ]
+        [Utils.run(cmd) for cmd in cmdz]
+        print('=============================')
