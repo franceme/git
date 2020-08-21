@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+'''
+@author franceme
+
+'''
 
 import hashlib
 import json
@@ -10,6 +14,7 @@ import sys
 import fileinput
 import time
 import pwd
+from glob import glob as re
 
 '''####################################
 #A utility class that contains the rest of the main common files
@@ -26,7 +31,7 @@ class Reader():
     def __enter__(self):
         if not os.path.exists(self.fileName):
             with open(self.fileName,'w') as foil:
-                foil.write('[]')
+                foil.write('{}')
         with open(self.fileName, 'r') as foil:
             self.data = json.load(foil)
         return self
@@ -38,15 +43,82 @@ class Reader():
 
     def __iadd__(self, obj, vcs='git clone git@github.com:'):
         Utils.run(f"{vcs}{obj}")
-        self.data += [obj]
+        self.data[obj] = {"Stashed":[]}
         return self.data
 
     def __isub__(self, name):
+        reponame = None
         for repo in self.data:
             if name.replace('/','') == Utils.path(repo):
-                self.data.remove(repo)
+                reponame = repo
                 Utils.run(f"rm -r {name}")
+        self.data.pop(reponame)
         return self.data
+# endregion
+# region Hooks
+class Hooks(object):
+    def cloneHook(repo):
+        with Reader() as info:
+            _repo, _reponame = None, None
+            for fullrepo in info.data.keys():
+                if Utils.path(fullrepo) + '/' == repo:
+                    _repo, _reponame = info.data[fullrepo], fullrepo
+            if _reponame in repos.keys():
+                base_path = Utils.path(repo) + '/'
+                if 'findreplace' in repos[fullrepo]:
+                    for sect in repos[fullrepo]['findreplace']:
+                        foil = base_path + sect['file']
+                        with fileinput.FileInput(foil, inplace=True) as file:
+                            for line in file:
+                                print(line.replace(sect['find'], sect['replace']), end='')
+                if 'exclude' in repos[fullrepo]:
+                    for globbing in repos[fullrepo]['exclude']:
+                        starter, ender, glober, capture = globbing['regionStart'], globbing['regionEnd'], globbing['glob'], False
+                        for foil in re(glober):
+                            with fileinput.FileInput(foil, inplace=True) as file:
+                                for line in file:
+                                    if line.strip().startswith(starter):
+                                        print(line.replace('\n',''))
+                                        if len(_repo['Stashed']) > 0:
+                                            [print(line.replace('\n','')) for line in _repo['Stashed'].pop(0).split('\n')]
+                                    else:
+                                        print(line.replace('\n',''))
+
+    def cmtHook(repo):
+        with Reader() as info:
+            _repo, _reponame = None, None
+            for fullrepo in info.data.keys():
+                if Utils.path(fullrepo) + '/' == repo:
+                    _repo, _reponame = info.data[fullrepo], fullrepo
+            if fullrepo in repos.keys():
+                print("Caught Here")
+                base_path = Utils.path(repo) + '/'
+                if 'findreplace' in repos[fullrepo]:
+                    for sect in repos[fullrepo]['findreplace']:
+                        foil = base_path + sect['file']
+                        with fileinput.FileInput(foil, inplace=True) as file:
+                            for line in file:
+                                print(line.replace(sect['replace'], sect['find']), end='')
+                if 'exclude' in repos[fullrepo]:
+                    for globbing in repos[fullrepo]['exclude']:
+                        starter, ender, glober, capture = globbing['regionStart'], globbing['regionEnd'], globbing['glob'], False
+                        temp_lines = []
+                        for foil in re(glober):
+                            with fileinput.FileInput(foil, inplace=True) as file:
+                                for line in file:
+                                    if capture and not line.strip().startswith(ender):
+                                        if line != '':
+                                            temp_lines += [line.replace('\n','')]
+                                    elif line.strip().startswith(starter):
+                                        capture = True
+                                        print(line.replace('\n',''))
+                                    elif line.strip().startswith(ender):
+                                        capture = False
+                                        print(line.replace('\n',''))
+                                        _repo['Stashed'] += ['\n'.join(temp_lines)]
+                                        temp_lines = []
+                                    else:
+                                        print(line.replace('\n',''))
 # endregion
 # region Cmds
 class Cmds(object):
@@ -87,31 +159,13 @@ class Cmds(object):
                     repo = f"{gitUserName}/{repo}"
 
                 info += repo
-                Cmds.cloneHook(repo)
-
-    def cloneHook(repo):
-        if repo in repos.keys():
-            base_path = Utils.path(repo) + '/'
-            for sect in repos[repo]['findreplace']:
-                foil = base_path + sect['file']
-                with fileinput.FileInput(foil, inplace=True) as file:
-                    for line in file:
-                        print(line.replace(sect['find'], sect['replace']), end='')
-
-    def cmtHook(repo):
-        if repo in repos.keys():
-            base_path = Utils.path(repo) + '/'
-            for sect in repos[repo]['findreplace']:
-                foil = base_path + sect['file']
-                with fileinput.FileInput(foil, inplace=True) as file:
-                    for line in file:
-                        print(line.replace(sect['replace'], sect['find']), end='')
+                Hooks.cloneHook(repo)
 
     def push(argz):
         if argz is None or len(argz)==0:
             with Reader() as info:
                 for repo in info.data:
-                    Cmds.cmtHook(repo)
+                    Hooks.cmtHook(repo)
                     print(f"Pushing the Repo {repo}")
                     cmdz = [
                         f"git -C {Utils.path(repo)} add .",
@@ -120,11 +174,11 @@ class Cmds(object):
                         f"git -C {Utils.path(repo)} push",
                     ]
                     [Utils.run(cmd) for cmd in cmdz]
-                    Cmds.cloneHook(repo)
+                    Hooks.cloneHook(repo)
                 print('===============================')
         else:
             for repo in argz:
-                Cmds.cmtHook(repo)
+                Hooks.cmtHook(repo)
                 print(f"Pushing the Repo {repo}")
                 cmdz = [
                     f"git -C {repo} add .",
@@ -133,7 +187,7 @@ class Cmds(object):
                     f"git -C {repo} push",
                 ]
                 [Utils.run(cmd) for cmd in cmdz]
-                Cmds.cloneHook(repo)
+                Hooks.cloneHook(repo)
 
     def branch(argz):
         if argz is None or len(argz)==0:
@@ -182,6 +236,9 @@ class Cmds(object):
     def sync(argz):
         Cmds.update(argz)
         Cmds.push(argz)
+    
+    def issues(argz):
+        Cmds.gh_simple(argz, 'issue list','Viewing the issues of')
 
     def status(argz):
         Cmds.simple(argz, 'status','Checking the status of')
@@ -191,41 +248,65 @@ class Cmds(object):
 
     def update(argz):
         Cmds.simple(argz, 'pull','Pulling the status of')
+    
+    def gh_simple(argz, cmd, exp):
+        if argz is None or len(argz)==0:
+            with Reader() as info:
+                for repo in info.data:
+                    Hooks.cmtHook(repo)
+                    print(f"{exp} the Repo {repo}")
+                    runner = f"gh {cmd}"
+                    Utils.run(runner, Utils.path(repo))
+                    print('\n')
+                    Hooks.cloneHook(repo)
+                print('===============================')
+        else:
+            for repo in argz:
+                Hooks.cmtHook(repo)
+                print(f"{exp} the Repo {repo}")
+                runner = f"gh {cmd}"
+                Utils.run(runner, repo)
+                Hooks.cloneHook(repo)
 
     def simple(argz, cmd, exp):
         if argz is None or len(argz)==0:
             with Reader() as info:
                 for repo in info.data:
-                    Cmds.cmtHook(repo)
+                    Hooks.cmtHook(repo)
                     print(f"{exp} the Repo {repo}")
                     runner = f"git -C {Utils.path(repo)} {cmd}"
                     Utils.run(runner)
                     print('\n')
-                    Cmds.cloneHook(repo)
+                    Hooks.cloneHook(repo)
                 print('===============================')
         else:
             for repo in argz:
-                Cmds.cmtHook(repo)
+                Hooks.cmtHook(repo)
                 print(f"{exp} the Repo {repo}")
                 runner = f"git -C {repo} {cmd}"
                 Utils.run(runner)
-                Cmds.cloneHook(repo)
+                Hooks.cloneHook(repo)
 
     def remove(argz):
         with Reader() as info:
             for repo in argz:
                 info -= repo
-
-
-
 # endregion
 # region Utils
 class Utils(object):
     def path(repo):
         return repo.split('/')[1]
-    def run(command):
+    def get(repoName):
+        with Reader() as info:
+            for repo in info.data.keys():
+                if Utils.path(repo) == repoName:
+                    return repo
+            return None
+    def run(command, subdir=None):
         os.setuid(pwd.getpwuid(os.getuid()).pw_uid)
         print(f"Running the command: {command}")
+        if subdir is not None:
+            os.chdir(subdir)
         temp=subprocess.Popen(('yes'),stdout=subprocess.PIPE)
         process = subprocess.Popen(shlex.split(command),stdin=temp.stdout, stdout=subprocess.PIPE)
         while True:
@@ -233,7 +314,10 @@ class Utils(object):
             if output == '' or process.poll() is not None:
                 break
             if output:
-                print(output.strip())
+                outputString = '\t' + str(output.strip())[2:-1].replace('\\t','\t')
+                print(outputString)
+        if subdir is not None:
+            os.chdir('../')
 
     def start():
         if len(sys.argv) == 1:
@@ -244,44 +328,20 @@ class Utils(object):
 # endregion
 # region Hooks
 repos = {
-    'franceme/Cryptoguard': {
+    'example': {
         'findreplace': [
             {
-                'file':'build.gradle',
-                'find':'JAVA7SDK',
-                'replace':"/home/maister/.sdkman/candidates/java/7.0.80-oracle"
-            },
-            {
-                'file':'build.gradle',
-                'find':'JAVA8SDK',
-                'replace':"/home/maister/.sdkman/candidates/java/current"
-            },
-            {
-                'file':'build.gradle',
-                'find':'ANDROIDSDK',
-                'replace':"/home/maister/.sdkman/candidates/android/current"
+                'file':'FILEHERE',
+                'find':'RAWPASSWORD',
+                'replace':"PASSWORDHERE"
             }
-        ]
+        ],
+        "exclude": {
+            "regionStart":"//excludeRegionStart",
+            "regionEnd":"//excludeRegionEnd"
+
+        }
     },
-    'franceme/cryptoguard': {
-        'findreplace': [
-            {
-                'file':'build.gradle',
-                'find':'JAVA7SDK',
-                'replace':"/home/maister/.sdkman/candidates/java/7.0.80-oracle"
-            },
-            {
-                'file':'build.gradle',
-                'find':'JAVA8SDK',
-                'replace':"/home/maister/.sdkman/candidates/java/current"
-            },
-            {
-                'file':'build.gradle',
-                'find':'ANDROIDSDK',
-                'replace':"/home/maister/.sdkman/candidates/android/current"
-            }
-        ]
-    }
 }
 # endregion
 # region Routers
@@ -345,6 +405,10 @@ routers = {
         "func": Cmds.bfg,
         "def": "Shows the commands to use BFG"
     },
+    'issues': {
+        "func": Cmds.issues,
+        "def": "Shows the issues of the repo listed"
+    },
 }
 
 
@@ -365,14 +429,3 @@ if __name__ == '__main__':
         [print('\t./make.py ' + str(arg) + ": " + str(routers[arg]['def'])) for arg in routers.keys()]
     else:
         Utils.start()
-        print('=============================')
-        print('Syncing the core repo')
-        repo = './'
-        cmdz = [
-            f"git -C {repo} add .",
-            f"git -C {repo} rm .",
-            f"git -C {repo} commit -m \"Update\" -S",
-            f"git -C {repo} push",
-        ]
-        [Utils.run(cmd) for cmd in cmdz]
-        print('=============================')
