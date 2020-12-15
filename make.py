@@ -48,11 +48,14 @@ class Reader():
 
     def __isub__(self, name):
         reponame = None
+        #if len(name.split('/')) > 1:
+        #    name = name.split('/')[1]
         for repo in self.data:
             if name.replace('/','') == Utils.path(repo):
                 reponame = repo
                 Utils.run(f"rm -r {name}")
-        self.data.pop(reponame)
+        if reponame is not None:
+            self.data.pop(reponame)
         return self.data
 # endregion
 # region Hooks
@@ -90,17 +93,17 @@ class Hooks(object):
             for fullrepo in info.data.keys():
                 if Utils.path(fullrepo) + '/' == repo:
                     _repo, _reponame = info.data[fullrepo], fullrepo
-            if fullrepo in repos.keys():
-                print("Caught Here")
+
+            if _reponame in repos.keys():
                 base_path = Utils.path(repo) + '/'
-                if 'findreplace' in repos[fullrepo]:
-                    for sect in repos[fullrepo]['findreplace']:
+                if 'findreplace' in repos[_reponame]:
+                    for sect in repos[_reponame]['findreplace']:
                         foil = base_path + sect['file']
                         with fileinput.FileInput(foil, inplace=True) as file:
                             for line in file:
                                 print(line.replace(sect['replace'], sect['find']), end='')
-                if 'exclude' in repos[fullrepo]:
-                    for globbing in repos[fullrepo]['exclude']:
+                if 'exclude' in repos[_reponame]:
+                    for globbing in repos[_reponame]['exclude']:
                         starter, ender, glober, capture = globbing['regionStart'], globbing['regionEnd'], globbing['glob'], False
                         temp_lines = []
                         for foil in re(glober):
@@ -248,7 +251,11 @@ class Cmds(object):
 
     def update(argz):
         Cmds.simple(argz, 'pull','Pulling the status of')
-    
+
+    # https://www.freecodecamp.org/news/how-to-sync-your-fork-with-the-original-git-repository/
+    def sync_remote(argz):
+        Cmds.simple(argz, ['git fetch upstream','git checkout master','git merge upstream/master'],'Syncing from the upstream')
+
     def gh_simple(argz, cmd, exp):
         if argz is None or len(argz)==0:
             with Reader() as info:
@@ -274,8 +281,9 @@ class Cmds(object):
                 for repo in info.data:
                     Hooks.cmtHook(repo)
                     print(f"{exp} the Repo {repo}")
-                    runner = f"git -C {Utils.path(repo)} {cmd}"
-                    Utils.run(runner)
+                    for lin_cmd in to_list(cmd):
+                        runner = f"git -C {Utils.path(repo)} {lin_cmd}"
+                        Utils.run(runner)
                     print('\n')
                     Hooks.cloneHook(repo)
                 print('===============================')
@@ -283,8 +291,9 @@ class Cmds(object):
             for repo in argz:
                 Hooks.cmtHook(repo)
                 print(f"{exp} the Repo {repo}")
-                runner = f"git -C {repo} {cmd}"
-                Utils.run(runner)
+                for lin_cmd in cmd:
+                    runner = f"git -C {repo} {lin_cmd}"
+                    Utils.run(runner)
                 Hooks.cloneHook(repo)
 
     def remove(argz):
@@ -341,6 +350,37 @@ repos = {
             "regionEnd":"//excludeRegionEnd"
 
         }
+    },
+    'franceme/cryptoguard': {
+        'findreplace': [
+            {
+                'file':'build.gradle',
+                'find':'JAVA7SDK',
+                'replace':"/home/maister/.sdkman/candidates/java/7.0.80-oracle"
+            },
+            {
+                'file':'build.gradle',
+                'find':'JAVA8SDK',
+                'replace':"/home/maister/.sdkman/candidates/java/current"
+            },
+            {
+                'file':'build.gradle',
+                'find':'ANDROIDSDK',
+                'replace':"/home/maister/.sdkman/candidates/android/current"
+            }
+        ],
+        "exclude": [{
+            "glob": "**/*.java",
+            "regionStart":"//excludeRegionStart",
+            "regionEnd":"//excludeRegionEnd"
+        }]
+    },
+    'franceme/simpleJava': {
+        "exclude": [{
+            "glob": "**/*.java",
+            "regionStart":"//excludeRegionStart",
+            "regionEnd":"//excludeRegionEnd"
+        }]
     },
 }
 # endregion
@@ -401,6 +441,10 @@ routers = {
         "func": Cmds.branchs,
         "def": "Views the branchs of the specified repo"
     },
+    'remote': {
+        "func": Cmds.sync_remote,
+        "def": "Syncs the remote branch with the current branch"
+    },
     'bfg': {
         "func": Cmds.bfg,
         "def": "Shows the commands to use BFG"
@@ -413,6 +457,12 @@ routers = {
 
 
 # endregion
+
+def to_list(obj):
+    if isinstance(obj, list):
+        return obj
+    else:
+        return [obj]
 
 def signal_handler(sig, frame):
     print('\nExiting...')

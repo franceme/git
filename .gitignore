@@ -1,5 +1,7 @@
+*
 */
-*.bak
-*.log
-
-.git.json
+!.gitignore
+!.gitattributes
+!.LICENSE
+!README.md
+!make.py
